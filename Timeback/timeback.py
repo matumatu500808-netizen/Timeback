@@ -8,7 +8,6 @@ import io
 import json
 import re
 from datetime import date, datetime, time
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -30,7 +29,6 @@ table.mc small{color:#4a90d9;font-size:10px}
     unsafe_allow_html=True,
 )
 
-DATA = Path(__file__).parent / "data.json"
 DAYS = ["月", "火", "水", "木", "金"]
 WD = DAYS + ["土", "日"]
 DEFAULT = {
@@ -44,20 +42,6 @@ DEFAULT = {
     "qa": {},                             # 生活リズムの回答
     "qdone": False,
 }
-
-
-def load():
-    data = copy.deepcopy(DEFAULT)
-    if DATA.exists():
-        try:
-            data.update(json.loads(DATA.read_text(encoding="utf-8")))
-        except json.JSONDecodeError:
-            pass
-    return data
-
-
-def save():
-    DATA.write_text(json.dumps(st.session_state.S, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def split(s):
@@ -255,7 +239,7 @@ def read_timetable(photo):
 
 
 if "S" not in st.session_state:
-    st.session_state.S = load()
+    st.session_state.S = copy.deepcopy(DEFAULT)
 S = st.session_state.S
 
 now = datetime.now()
@@ -279,7 +263,6 @@ with tab_home:
             c1, c2 = st.columns(2)
             if qi > 0 and c1.button("戻る"):
                 S["qa"].update(vals)
-                save()
                 st.session_state.qi = qi - 1
                 st.rerun()
             if c2.button("次へ" if left else "完了", type="primary"):
@@ -290,7 +273,6 @@ with tab_home:
                     S["qdone"] = True
                     st.session_state.qi = None
                     st.toast("回答ありがとう！空き時間を計算しました。")
-                save()
                 st.rerun()
         st.stop()
 
@@ -325,7 +307,6 @@ with tab_home:
                     if t["id"] == cur.get("t"):
                         t["d"] = True
                 S["lg"].append({"ts": now.isoformat(timespec="seconds"), "day": today.isoformat(), "id": cur["id"]})
-                save()
                 st.rerun()
         else:
             st.subheader("空白")
@@ -364,7 +345,6 @@ with tab_home:
                         S["pl"].setdefault(today.isoformat(), []).append(
                             {"id": base + i, "s": hm(s), "e": hm(e), "x": t["x"], "d": False, "t": t["id"]}
                         )
-                    save()
                     st.rerun()
             elif slots:
                 st.caption("やることを追加すると、空き枠に割り当てます。")
@@ -376,17 +356,14 @@ with tab_home:
             v = c1.checkbox(t["x"], value=t["d"], key=f"td{t['id']}")
             if v != t["d"]:
                 t["d"] = v
-                save()
                 st.rerun()
             if c2.button("削除", key=f"tdr{t['id']}"):
                 S["td"] = [u for u in S["td"] if u["id"] != t["id"]]
-                save()
                 st.rerun()
         with st.form("addtd", clear_on_submit=True):
             x = st.text_input("追加", placeholder="Legend 例題3問")
             if st.form_submit_button("追加") and x.strip():
                 S["td"].append({"id": int(datetime.now().timestamp() * 1000), "x": x.strip(), "d": False})
-                save()
                 st.rerun()
 
     with st.container(border=True):
@@ -403,7 +380,6 @@ with tab_home:
             v = st.checkbox(it, value=checks.get(it, False), key=f"ck-{iso}-{it}")
             if v != checks.get(it, False):
                 checks[it] = v
-                save()
 
 # ---------- カレンダー ----------
 with tab_cal:
@@ -422,7 +398,6 @@ with tab_cal:
             c1.write(f"{p['s']}–{p['e']}　{p['x']}" + ("　✓" if p["d"] else ""))
             if c2.button("削除", key=f"rm-{p['id']}"):
                 S["pl"][iso] = [q for q in S["pl"][iso] if q["id"] != p["id"]]
-                save()
                 st.rerun()
         with st.form("add", clear_on_submit=True):
             c1, c2 = st.columns(2)
@@ -438,7 +413,6 @@ with tab_cal:
                     S["pl"].setdefault(iso, []).append(
                         {"id": int(datetime.now().timestamp() * 1000), "s": fs(s), "e": fs(e), "x": x.strip(), "d": False}
                     )
-                    save()
                     st.rerun()
 
 # ---------- 時間割・持ち物 ----------
@@ -458,7 +432,6 @@ with tab_tt:
                             st.error(f"読み取りに失敗しました: {ex}")
                     if rows:
                         S["tt"] = rows
-                        save()
                         st.session_state.ttv = st.session_state.get("ttv", 0) + 1
                         st.rerun()
                 st.caption("写真はAIサービスに送信されます。氏名や学校名が写らないようにしてください。")
@@ -472,16 +445,13 @@ with tab_tt:
         new_tt = edited.fillna("").values.tolist()
         if new_tt != S["tt"]:
             S["tt"] = new_tt
-            save()
 
     with st.container(border=True):
         st.markdown("**持ち物**")
         base = st.text_input("毎日（カンマ区切り）", S["base"])
         if base != S["base"]:
             S["base"] = base
-            save()
         for i, name in enumerate(DAYS):
             v = st.text_input(f"{name}曜日だけ", S["it"][i], key=f"it{i}", placeholder="体操服")
             if v != S["it"][i]:
                 S["it"][i] = v
-                save()
